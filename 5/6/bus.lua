@@ -305,19 +305,27 @@ function node_function (node, result)
 
   -- check if node is a maxweight/height/width limit
   local tag = node:get_value_by_key("maxweight")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxweight then
-    result.barrier = true
+  if tag then 
+    local tagN = tonumber(tag:match("%d+%.?%d*"))
+    if tagN and tagN < maxweight then
+      result.barrier = true
+    end
   end
+
   local tag = node:get_value_by_key("maxwidth")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxwidth then
-    result.barrier = true
+  if tag then
+    local tagN = tonumber(tag:match("%d+%.?%d*"))
+    if tagN and tagN < maxwidth then
+      result.barrier = true
+    end
   end
+
   local tag = node:get_value_by_key("maxheight")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxheight then
-    result.barrier = true
+  if tag then
+    local tagN = tonumber(tag:match("%d+%.?%d*"))
+    if tagN and tagN < maxheight then
+      result.barrier = true
+    end
   end
 
 
@@ -430,22 +438,28 @@ function way_function(way, result)
 
 
   local tag = way:get_value_by_key("maxweight")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxweight then
-    result.forward_mode = mode.inaccessible
-    result.backward_mode = mode.inaccessible
+  if tag then
+    local tagN = tonumber(tag:match("%d+%.?%d*"))
+    if tagN and tagN < maxweight then
+      result.forward_mode = mode.inaccessible
+      result.backward_mode = mode.inaccessible
+    end
   end
   local tag = way:get_value_by_key("maxwidth")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxwidth then
-    result.forward_mode = mode.inaccessible
-    result.backward_mode = mode.inaccessible
+  if tag then
+    local tagN = tonumber(tag:match("%d+%.?%d*"))
+    if tagN and tagN < maxwidth then
+      result.forward_mode = mode.inaccessible
+      result.backward_mode = mode.inaccessible
+    end
   end
   local tag = way:get_value_by_key("maxheight")
-  local tagN = tonumber(tag:match("%d+%.?%d*"))
-  if tagN and tagN < maxheight then
-    result.forward_mode = mode.inaccessible
-    result.backward_mode = mode.inaccessible
+  if tag then
+      local tagN = tonumber(tag:match("%d+%.?%d*"))
+      if tagN and tagN < maxheight then
+        result.forward_mode = mode.inaccessible
+        result.backward_mode = mode.inaccessible
+      end
   end
 
 
@@ -488,6 +502,7 @@ function turn_function (turn)
     end
   end
 end
+
 
 
 
