@@ -511,6 +511,7 @@ function Handlers.handle_bus_oneway(way,result,data,profile)
     end
   end
 
+  print("bus_oneway "..oneway)
 
 local busway = way:get_value_by_key("busway")
 local bus = way:get_value_by_key("bus")
@@ -518,16 +519,16 @@ local psv = way:get_value_by_key("psv")
 
 -- if psv or bus*=opposite*
 if (busway and string.find(busway, "opposite") == 1) or (bus and string.find(bus, "opposite") == 1) or (psv and string.find(psv, "opposite") == 1) then
-   bus_opposite = yes
+   bus_opposite = true
 else
-   no_bus_opposite = yes
+   bus_opposite = false
 end
 
 
   data.oneway = oneway
 
   if oneway == "-1" then
-    if no_bus_opposite then
+    if not bus_opposite then
       data.is_reverse_oneway = true
       result.forward_mode = mode.inaccessible
     end
@@ -536,7 +537,7 @@ end
   elseif oneway == "yes" or
          oneway == "1" or
          oneway == "true" then
-    if no_bus_opposite then
+    if not bus_opposite then
       data.is_forward_oneway = true
       result.backward_mode = mode.inaccessible
     end
