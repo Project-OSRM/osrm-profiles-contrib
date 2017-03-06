@@ -304,16 +304,19 @@ function node_function (node, result)
 
 
   -- check if node is a maxweight/height/width limit
---  local tag = node:get_value_by_key("maxweight")
---  if tag and tonumber(tag:match("%d.%d*")) < maxweight then
+  local tag = node:get_value_by_key("maxweight")
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxweight then
     result.barrier = true
   end
   local tag = node:get_value_by_key("maxwidth")
-  if tag and tonumber(tag:match("%d.%d*")) < maxwidth then
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxwidth then
     result.barrier = true
   end
   local tag = node:get_value_by_key("maxheight")
-  if tag and tonumber(tag:match("%d.%d*")) < maxheight then
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxheight then
     result.barrier = true
   end
 
@@ -426,19 +429,21 @@ function way_function(way, result)
   Handlers.run(handlers,way,result,data,profile)
 
 
-
   local tag = way:get_value_by_key("maxweight")
-  if tag and tonumber(tag) < maxweight then
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxweight then
     result.forward_mode = mode.inaccessible
     result.backward_mode = mode.inaccessible
   end
   local tag = way:get_value_by_key("maxwidth")
-  if tag and tonumber(tag) < maxwidth then
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxwidth then
     result.forward_mode = mode.inaccessible
     result.backward_mode = mode.inaccessible
   end
   local tag = way:get_value_by_key("maxheight")
-  if tag and tonumber(tag) < maxheight then
+  local tagN = tonumber(tag:match("%d+%.?%d*"))
+  if tagN and tagN < maxheight then
     result.forward_mode = mode.inaccessible
     result.backward_mode = mode.inaccessible
   end
