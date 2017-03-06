@@ -5,7 +5,7 @@ Profile based on car profile. Use diff to review the changes.
 ## Why
 
 Integration of relation=route for busses on OSM can be tricky.
-For example, several GTFS feeds do not specify the shapes of the trips or route
+For example, several GTFS feeds do not specify the shapes of the trips or route, but only the list of bus stops (with coordinates)
 
 Having a bus profile is a good tool to deduce a efficient route shape from a GTFS feed (by using stop coordinates and timetables, you can use match service)
 
