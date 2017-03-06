@@ -511,7 +511,7 @@ function Handlers.handle_bus_oneway(way,result,data,profile)
     end
   end
 
-  print("bus_oneway "..oneway)
+
 
 local busway = way:get_value_by_key("busway")
 local bus = way:get_value_by_key("bus")
