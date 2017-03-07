@@ -20,10 +20,6 @@ penalty_table = {
 }
 
 
--- set "bus" properties
-local maxweight=19
-local maxwidth=2.55
-local maxheight=3.5
 
 
 -- set profile properties
@@ -55,6 +51,14 @@ local profile = {
   -- Note: this biases right-side driving.
   -- Should be inverted for left-driving countries.
   turn_bias   = properties.left_hand_driving and 1/1.075 or 1.075,
+
+
+-- set "bus" properties
+  maxweight=19
+  maxwidth=2.55
+  maxheight=3.5
+
+
 
   -- a list of suffixes to suppress in name change instructions
   suffix_list = {
@@ -305,9 +309,9 @@ function node_function (node, result)
 
   -- check if node is a maxweight/height/width limit
   local tag = node:get_value_by_key("maxweight")
-  if tag then 
+  if tag then
     local tagN = tonumber(tag:match("%d+%.?%d*"))
-    if tagN and tagN < maxweight then
+    if tagN and tagN < profile.maxweight then
       result.barrier = true
     end
   end
@@ -315,7 +319,7 @@ function node_function (node, result)
   local tag = node:get_value_by_key("maxwidth")
   if tag then
     local tagN = tonumber(tag:match("%d+%.?%d*"))
-    if tagN and tagN < maxwidth then
+    if tagN and tagN < profile.maxwidth then
       result.barrier = true
     end
   end
@@ -323,7 +327,7 @@ function node_function (node, result)
   local tag = node:get_value_by_key("maxheight")
   if tag then
     local tagN = tonumber(tag:match("%d+%.?%d*"))
-    if tagN and tagN < maxheight then
+    if tagN and tagN < profile.maxheight then
       result.barrier = true
     end
   end
@@ -440,7 +444,7 @@ function way_function(way, result)
   local tag = way:get_value_by_key("maxweight")
   if tag then
     local tagN = tonumber(tag:match("%d+%.?%d*"))
-    if tagN and tagN < maxweight then
+    if tagN and tagN < profile.maxweight then
       result.forward_mode = mode.inaccessible
       result.backward_mode = mode.inaccessible
     end
@@ -448,7 +452,7 @@ function way_function(way, result)
   local tag = way:get_value_by_key("maxwidth")
   if tag then
     local tagN = tonumber(tag:match("%d+%.?%d*"))
-    if tagN and tagN < maxwidth then
+    if tagN and tagN < profile.maxwidth then
       result.forward_mode = mode.inaccessible
       result.backward_mode = mode.inaccessible
     end
@@ -456,7 +460,7 @@ function way_function(way, result)
   local tag = way:get_value_by_key("maxheight")
   if tag then
       local tagN = tonumber(tag:match("%d+%.?%d*"))
-      if tagN and tagN < maxheight then
+      if tagN and tagN < profile.maxheight then
         result.forward_mode = mode.inaccessible
         result.backward_mode = mode.inaccessible
       end
