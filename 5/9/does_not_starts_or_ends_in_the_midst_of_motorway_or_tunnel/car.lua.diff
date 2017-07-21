@@ -1,0 +1,32 @@
+diff --git a/profiles/car.lua b/profiles/car.lua
+index 90c23f67b..314f22b0b 100644
+--- a/profiles/car.lua
++++ b/profiles/car.lua
+@@ -277,6 +277,18 @@ function get_name_suffix_list(vector)
+   end
+ end
+ 
++-- determine if this way can be used as a start/end point for routing
++function Handlers.startpoint_secure(way,result,data,profile)
++  local highway = way:get_value_by_key("highway")
++  local tunnel = way:get_value_by_key("tunnel")
++
++  if highway ~= "motorway" and (not tunnel or tunnel == "") then
++    Handlers.handle_startpoint(way,result,data,profile)
++  else
++    result.is_startpoint = false
++  end
++end
++
+ function get_restrictions(vector)
+   for i,v in ipairs(profile.restrictions) do
+     vector:Add(v)
+@@ -384,7 +396,7 @@ function way_function(way, result)
+ 
+     -- handle various other flags
+     'handle_roundabouts',
+-    'handle_startpoint',
++    'startpoint_secure',
+ 
+     -- set name, ref and pronunciation
+     'handle_names',
