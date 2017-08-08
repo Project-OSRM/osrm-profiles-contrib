@@ -1,0 +1,327 @@
+diff --git a/profiles/car.lua b/profiles/car.lua
+index 90c23f67b..3d2163b55 100644
+--- a/profiles/car.lua
++++ b/profiles/car.lua
+@@ -1,5 +1,8 @@
+ -- Car profile
+ 
++-- Define sql_conn and redis_conn
++require "profile-config"
++
+ api_version = 1
+ 
+ local find_access_tag = require("lib/access").find_access_tag
+@@ -28,12 +31,12 @@ properties.call_tagless_node_function      = false
+ 
+ local profile = {
+   default_mode      = mode.driving,
+-  default_speed     = 10,
++  default_speed     = function (way) return speed_profile(speed_coef(way), 'default') end,
+   oneway_handling   = true,
+ 
+   side_road_multiplier       = 0.8,
+   turn_penalty               = 7.5,
+-  speed_reduction            = 0.8,
++  speed_reduction            = 0.8, -- Not Used
+   traffic_light_penalty      = 2,
+   u_turn_penalty             = 20,
+ 
+@@ -122,24 +125,9 @@ local profile = {
+     'proposed'
+   },
+ 
+-  speeds = Sequence {
+-    highway = {
+-      motorway        = 90,
+-      motorway_link   = 45,
+-      trunk           = 85,
+-      trunk_link      = 40,
+-      primary         = 65,
+-      primary_link    = 30,
+-      secondary       = 55,
+-      secondary_link  = 25,
+-      tertiary        = 40,
+-      tertiary_link   = 20,
+-      unclassified    = 25,
+-      residential     = 25,
+-      living_street   = 10,
+-      service         = 15
+-    }
+-  },
++  speeds = function (way) return speed_profile(speed_coef(way), way:get_value_by_key('highway')) end,
++
++  maxspeeds = function (way, max_speed) return max_speed_coef(speed_coef(way), max_speed) end,
+ 
+   service_penalties = {
+     alley             = 0.5,
+@@ -277,6 +265,221 @@ function get_name_suffix_list(vector)
+   end
+ end
+ 
++speeds_interurban = {
++  motorway        = 115,
++  motorway_link   =  45,
++  trunk           = 100,
++  trunk_link      =  40,
++  primary         =  85,
++  primary_link    =  30,
++  secondary       =  77,
++  secondary_link  =  25,
++  tertiary        =  68,
++  tertiary_link   =  20,
++  unclassified    =  58,
++  residential     =  30,
++  living_street   =  20,
++  service         =  20,
++  pedestrian      =   5,
++  track           =   5,
++  default         =  20
++}
++
++speeds_urban = {
++  motorway        = 90,
++  motorway_link   = 45,
++  trunk           = 75,
++  trunk_link      = 37,
++  primary         = 33,
++  primary_link    = 15,
++  secondary       = 28,
++  secondary_link  = 14,
++  tertiary        = 24,
++  tertiary_link   = 12,
++  unclassified    = 22,
++  residential     = 21,
++  living_street   = 13,
++  service         = 13,
++  pedestrian      =  5,
++  track           =  5,
++  default         = 13
++}
++
++speeds_urban_dense = {
++  motorway        = 70,
++  motorway_link   = 35,
++  trunk           = 58,
++  trunk_link      = 27,
++  primary         = 15,
++  primary_link    =  9,
++  secondary       = 12,
++  secondary_link  =  7,
++  tertiary        = 10,
++  tertiary_link   =  5,
++  unclassified    =  9,
++  residential     =  9,
++  living_street   =  8,
++  service         =  8,
++  pedestrian      =  5,
++  track           =  5,
++  default         =  8
++}
++
++urban_query_ = [[
++SELECT
++  code AS code,
++  SUM(l) / ST_Length((SELECT linestring FROM ways where id = %s)) AS l
++FROM (
++  SELECT
++    code,
++    ST_Length(ST_Intersection(geom, (SELECT linestring FROM ways where id = '%s'))) AS l
++  FROM
++    urban
++  WHERE
++    geom && (SELECT linestring FROM ways where id = %s) AND
++    ST_Intersects(geom, (SELECT linestring FROM ways where id = %s))
++) AS t
++GROUP BY
++  code
++;
++]]
++
++urban_query = [[
++SELECT
++  code AS code,
++  SUM(l) AS l
++FROM (
++  SELECT
++    code,
++    ST_Length(ST_Intersection(geom, linestring)) / ST_Length(linestring) AS l
++  FROM
++    (SELECT ST_GeomFromText('LINESTRING(%s)', 4326) AS linestring) AS linestrings,
++    urban
++  WHERE
++    ST_Length(linestring) > 0 AND
++    ST_Intersects(geom, linestring)
++) AS t
++GROUP BY
++  code
++;
++]]
++
++function speed_profile(coefs, highway)
++  if speeds_interurban[highway] and speeds_urban_dense[highway] and speeds_urban[highway] then
++    return
++      coefs[1] * speeds_interurban[highway] +
++      coefs[2] * speeds_urban[highway] +
++      coefs[3] * speeds_urban[highway] +
++      coefs[4] * speeds_urban_dense[highway]
++  end
++end
++
++function speed_coef_sql(way)
++  local linestring = {}
++  local nodes = way:get_nodes()
++
++  local n = 0
++  for _, node in pairs(nodes) do
++    if node:location():valid() then
++      table.insert(linestring, node:location():lon() .. " " .. node:location():lat())
++      n = n + 1
++    else
++      assert(not("No valid location on NodeRef"))
++    end
++  end
++  if n <= 1 then
++    return {0, 0, 0, 0}
++  end
++  linestring = table.concat(linestring, ",")
++
++  local sql = urban_query:format(linestring)
++  local cur = assert(sql_conn:execute(sql))
++
++  local codes = {
++    ["1"] = 4, -- Continuous urban
++    ["2"] = 3, -- Discontinuous urban & Industrial or commercial
++    ["5"] = 2 -- Water bodies
++  }
++  local speeds = {1, 0, 0, 0}
++
++  row = cur:fetch ({}, "a")
++  while row do
++    speeds[1] = speeds[1] - row.l
++    local c = codes[row.code]
++    speeds[c] = row.l
++
++    row = cur:fetch (row, "a")
++  end
++
++  return speeds
++end
++
++function speed_coef(way)
++  assert(way:version() ~= 0)
++
++  local speeds_v = redis_conn:lrange(way:id(), 0, -1)
++  if tonumber(speeds_v[5]) == way:version() then
++    return {tonumber(speeds_v[1]), tonumber(speeds_v[2]), tonumber(speeds_v[3]), tonumber(speeds_v[4])}
++  end
++
++  speeds = speed_coef_sql(way)
++
++  redis_conn:del(way:id())
++  local speeds_v = {speeds[1], speeds[2], speeds[3], speeds[4], way:version()}
++  redis_conn:rpush(way:id(), unpack(speeds_v))
++
++  return speeds
++end
++
++max_speeds = {
++  [130] = {115, 90, 90, 70},
++  [110] = {100, 75, 75, 58},
++  [90] = {85, 60, 60, 43},
++  [50] = {47, 33, 33, 15},
++  [30] = {29, 19, 19, 9},
++  [20] = {20, 13, 13, 8},
++  [0] = {0, 0, 0, 0}
++}
++
++max_speeds_bounds = {{nil, 130}, {130, 110}, {110, 90}, {90, 50}, {50, 30}, {30, 20}, {20, 0}}
++
++function max_speed_coef(coefs, max_speed)
++  local speeds = max_speeds[max_speed]
++
++  if not speeds then
++    local bound
++    local i = 1
++    while max_speeds_bounds[i][1] ~= nil do
++      if max_speeds_bounds[i][1] > max_speed and max_speed >= max_speeds_bounds[i][2] then
++        bound = max_speeds_bounds[i]
++        break
++      end
++      i = i + 1
++    end
++
++    if not bound then
++      return max_speed * 0.8
++    end
++
++    if bound[1] == nil then
++      bound[1] = bound[2]
++    end
++
++    speeds = {
++      (max_speed - max_speeds[bound[2]][1]) / (max_speeds[bound[1]][1] - max_speeds[bound[2]][1]) + max_speeds[bound[2]][1],
++      (max_speed - max_speeds[bound[2]][2]) / (max_speeds[bound[1]][2] - max_speeds[bound[2]][2]) + max_speeds[bound[2]][2],
++      (max_speed - max_speeds[bound[2]][3]) / (max_speeds[bound[1]][3] - max_speeds[bound[2]][3]) + max_speeds[bound[2]][3],
++      (max_speed - max_speeds[bound[2]][4]) / (max_speeds[bound[1]][4] - max_speeds[bound[2]][4]) + max_speeds[bound[2]][4]
++    }
++  end
++
++  return
++    coefs[1] * speeds[1] +
++    coefs[2] * speeds[2] +
++    coefs[3] * speeds[3] +
++    coefs[4] * speeds[4]
++end
++
+ function get_restrictions(vector)
+   for i,v in ipairs(profile.restrictions) do
+     vector:Add(v)
+diff --git a/profiles/lib/handlers.lua b/profiles/lib/handlers.lua
+index b9d07bd8e..f7b38ce51 100644
+--- a/profiles/lib/handlers.lua
++++ b/profiles/lib/handlers.lua
+@@ -247,7 +247,7 @@ function Handlers.handle_speed(way,result,data,profile)
+     return        -- abort if already set, eg. by a route
+   end
+ 
+-  local key,value,speed = Tags.get_constant_by_key_value(way,profile.speeds)
++  local speed = profile.speeds(way)
+ 
+   if speed then
+     -- set speed by way type
+@@ -256,17 +256,17 @@ function Handlers.handle_speed(way,result,data,profile)
+   else
+     -- Set the avg speed on ways that are marked accessible
+     if profile.access_tag_whitelist[data.forward_access] then
+-      result.forward_speed = profile.default_speed
++      result.forward_speed = profile.default_speed(way)
+     elseif data.forward_access and not profile.access_tag_blacklist[data.forward_access] then
+-      result.forward_speed = profile.default_speed -- fallback to the avg speed if access tag is not blacklisted
++      result.forward_speed = profile.default_speed(way) -- fallback to the avg speed if access tag is not blacklisted
+     elseif not data.forward_access and data.backward_access then
+        result.forward_mode = mode.inaccessible
+     end
+ 
+     if profile.access_tag_whitelist[data.backward_access] then
+-      result.backward_speed = profile.default_speed
++      result.backward_speed = profile.default_speed(way)
+     elseif data.backward_access and not profile.access_tag_blacklist[data.backward_access] then
+-      result.backward_speed = profile.default_speed -- fallback to the avg speed if access tag is not blacklisted
++      result.backward_speed = profile.default_speed(way) -- fallback to the avg speed if access tag is not blacklisted
+     elseif not data.backward_access and data.forward_access then
+        result.backward_mode = mode.inaccessible
+     end
+@@ -396,11 +396,11 @@ function Handlers.handle_maxspeed(way,result,data,profile)
+   backward = Handlers.parse_maxspeed(backward,profile)
+ 
+   if forward and forward > 0 then
+-    result.forward_speed = forward * profile.speed_reduction
++    result.forward_speed = profile.maxspeeds(way, forward)
+   end
+ 
+   if backward and backward > 0 then
+-    result.backward_speed = backward * profile.speed_reduction
++    result.backward_speed = profile.maxspeeds(way, backward)
+   end
+ end
+ 
