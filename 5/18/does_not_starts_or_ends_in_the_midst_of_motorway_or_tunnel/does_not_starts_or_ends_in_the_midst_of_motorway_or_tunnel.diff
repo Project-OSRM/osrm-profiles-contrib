@@ -1,0 +1,44 @@
+diff --git a/profiles/car.lua b/profiles/car.lua
+index 161a6466b..ef516f3ca 100644
+--- a/profiles/car.lua
++++ b/profiles/car.lua
+@@ -10,6 +10,7 @@ find_access_tag = require("lib/access").find_access_tag
+ limit = require("lib/maxspeed").limit
+ Utils = require("lib/utils")
+ Measure = require("lib/measure")
++Startpoint_secure = require('lib/startpoint_secure')
+ 
+ function setup()
+   return {
+@@ -423,7 +424,7 @@ function process_way(profile, way, result, relations)
+ 
+     -- handle various other flags
+     WayHandlers.roundabouts,
+-    WayHandlers.startpoint,
++    Startpoint_secure.startpoint_secure,
+     WayHandlers.driving_side,
+ 
+     -- set name, ref and pronunciation
+diff --git a/profiles/lib/startpoint_secure.lua b/profiles/lib/startpoint_secure.lua
+new file mode 100644
+index 000000000..e0408efaa
+--- /dev/null
++++ b/profiles/lib/startpoint_secure.lua
+@@ -0,0 +1,17 @@
++WayHandlers = require("lib/way_handlers")
++
++local Startpoint_secure = {}
++
++-- determine if this way can be used as a start/end point for routing
++function Startpoint_secure.startpoint_secure(profile,way,result,data)
++  local highway = way:get_value_by_key("highway")
++  local tunnel = way:get_value_by_key("tunnel")
++
++  if highway ~= "motorway" and highway ~= "motorway_link" and (not tunnel or tunnel == "") then
++    WayHandlers.startpoint(way,result,data,profile)
++  else
++    result.is_startpoint = false
++  end
++end
++
++return Startpoint_secure
