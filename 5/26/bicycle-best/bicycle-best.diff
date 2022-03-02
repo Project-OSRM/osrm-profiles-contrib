@@ -1,0 +1,173 @@
+20,21c20
+<       --weight_name                   = 'cyclability',
+<       weight_name                   = 'duration',
+---
+>       weight_name                   = 'cyclability',
+23c22
+<       max_speed_for_map_matching    = 110/3.6, -- kmph -> m/s
+---
+>       max_speed_for_map_matching    = 70/3.6, -- kmph -> m/s
+26c25
+<       mode_change_penalty           = 30,
+---
+>       mode_change_penalty           = 20,
+33c32
+<     turn_penalty              = 6,
+---
+>     turn_penalty              = 5,
+51c50,51
+<       'designated'
+---
+>       'designated',
+> 	  'tolerated'
+68c68,70
+<     restricted_access_tag_list = Set { },
+---
+>     restricted_access_tag_list = Set {
+>       'destination'
+> 	},
+73c75,77
+<     service_access_tag_blacklist = Set { },
+---
+>     service_access_tag_blacklist = Set {
+> 	  'drive-through'
+> 	},
+78c82
+<       'minor',
+---
+>       'minor'
+97c101,102
+<       'shared_lane'
+---
+>       'shared_lane',
+> 	  'shoulder'
+106,118c111,120
+<     -- reduce the driving speed by 30% for unsafe roads
+<     -- only used for cyclability metric
+<     unsafe_highway_list = {
+<       primary = 0.5,
+<       secondary = 0.65,
+<       tertiary = 0.8,
+<       primary_link = 0.5,
+<       secondary_link = 0.65,
+<       tertiary_link = 0.8,
+<     },
+< 
+<     service_penalties = {
+<       alley             = 0.5,
+---
+>     -- penalize high traffic roads
+>     highways_list = {
+> 	  trunk = 1,
+>       primary = 1.4,
+>       secondary = 1.7,
+>       tertiary = 1.9,
+> 	  trunk_link = 1.1,
+>       primary_link = 1.5,
+>       secondary_link = 1.75,
+>       tertiary_link = 1.95
+133a136,137
+> 	  footway = 12,
+>       pedestrian = 14,
+135c139
+<       path = 12
+---
+>       path = 13
+139,140d142
+<       footway = walking_speed,
+<       pedestrian = walking_speed,
+175a178,181
+>       chipseal = default_speed,
+>       concrete = default_speed,
+>       concrete_lanes = default_speed,
+>       wood = 10,
+179c185
+<       cobblestone = 6,
+---
+>       cobblestone = 7,
+181c187
+<       fine_gravel = 6,
+---
+>       fine_gravel = 10,
+184,185c190,191
+<       ground = 6,
+<       dirt = 6,
+---
+>       ground = 10,
+>       dirt = 8,
+190c196
+<       sett = 10
+---
+>       sett = 9
+203a210,212
+> 	  grade3 = 9,
+> 	  grade2 = 8,
+> 	  grade1 = 6
+206a216,219
+> 	  bad = 8,
+> 	  very_bad = 6,
+> 	  horrible = 4,
+> 	  very_horrible = 3
+272,274c285,287
+<   data.maxspeed = Measure.get_max_speed(way:get_value_by_key ("maxspeed")) or 0
+<   data.maxspeed_forward = Measure.get_max_speed(way:get_value_by_key("maxspeed:forward")) or 0
+<   data.maxspeed_backward = Measure.get_max_speed(way:get_value_by_key("maxspeed:backward")) or 0
+---
+>   data.maxspeed = Measure.get_max_speed(way:get_value_by_key ("maxspeed:bicycle")) or 0
+>   data.maxspeed_forward = Measure.get_max_speed(way:get_value_by_key("maxspeed:bicycle:forward")) or 0
+>   data.maxspeed_backward = Measure.get_max_speed(way:get_value_by_key("maxspeed:bicycle:backward")) or 0
+278c291
+<   data.cycleway = way:get_value_by_key("cycleway")
+---
+>   data.cycleway = way:get_value_by_key("cycleway") or way:get_value_by_key("cycleway:both")
+507,508c520,521
+<     local safety_penalty = profile.unsafe_highway_list[data.highway] or 1.
+<     local is_unsafe = safety_penalty < 1
+---
+>     local safety_penalty = profile.highways_list[data.highway] or 2.
+> 	local car_maxspeed = Measure.get_max_speed(way:get_value_by_key("maxspeed")) or 0
+510,522c523,539
+<     -- primaries that are one ways are probably huge primaries where the lanes need to be separated
+<     if is_unsafe and data.highway == 'primary' and not data.is_twoway then
+<       safety_penalty = safety_penalty * 0.5
+<     end
+<     if is_unsafe and data.highway == 'secondary' and not data.is_twoway then
+<       safety_penalty = safety_penalty * 0.6
+<     end
+< 
+<     local forward_is_unsafe = is_unsafe and not data.has_cycleway_forward
+<     local backward_is_unsafe = is_unsafe and not data.has_cycleway_backward
+<     local is_undesireable = data.highway == "service" and profile.service_penalties[data.service]
+<     local forward_penalty = 1.
+<     local backward_penalty = 1.
+---
+> 	-- roads where cars drive fast (high maxspeed) are penalized
+> 	-- Only penalize when higher than 30km/h
+> 	if car_maxspeed > 30 then
+> 	    -- Penalize for -0.1 if maxspeed 40, to -1.1 if maxspeed 110
+> 		car_maxspeed_penalty = (car_maxspeed - 30) / 100
+> 		safety_penalty = safety_penalty - car_maxspeed_penalty
+> 	end
+> 	
+> 	-- promote bicycle roads tagged as highway=residential or others
+> 	if way:get_value_by_key("bicycle_street") == 'yes' then
+> 		safety_bonus = safety_bonus + 0.2
+> 	end
+> 
+>     local forward_is_unsafe = not data.has_cycleway_forward
+>     local backward_is_unsafe = not data.has_cycleway_backward
+>     local forward_penalty = 2.
+>     local backward_penalty = 2.
+524c541
+<       forward_penalty = math.min(forward_penalty, safety_penalty)
+---
+>       forward_penalty = safety_penalty - 0.2
+527,532c544
+<        backward_penalty = math.min(backward_penalty, safety_penalty)
+<     end
+< 
+<     if is_undesireable then
+<        forward_penalty = math.min(forward_penalty, profile.service_penalties[data.service])
+<        backward_penalty = math.min(backward_penalty, profile.service_penalties[data.service])
+---
+>        backward_penalty = safety_penalty - 0.2
