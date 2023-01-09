@@ -1,0 +1,207 @@
+diff --git a/profiles/car.lua b/profiles/car.lua
+index 770805962..2e71d2538 100644
+--- a/profiles/car.lua
++++ b/profiles/car.lua
+@@ -15,7 +15,7 @@ Measure = require("lib/measure")
+ function setup()
+   return {
+     properties = {
+-      max_speed_for_map_matching      = 180/3.6, -- 180kmph -> m/s
++      max_speed_for_map_matching      = 150/3.6, -- 150kmph -> m/s
+       -- For routing based on duration, but weighted for preferring certain roads
+       weight_name                     = 'routability',
+       -- For shortest duration without penalties for accessibility
+@@ -23,7 +23,7 @@ function setup()
+       -- For shortest distance without penalties for accessibility
+       -- weight_name                     = 'distance',
+       process_call_tagless_node      = false,
+-      u_turn_penalty                 = 20,
++      u_turn_penalty                 = 30,
+       continue_straight_at_waypoint  = true,
+       use_turn_restrictions          = true,
+       left_hand_driving              = false,
+@@ -34,18 +34,18 @@ function setup()
+     default_speed             = 10,
+     oneway_handling           = true,
+     side_road_multiplier      = 0.8,
+-    turn_penalty              = 7.5,
++    turn_penalty              = 25,
+     speed_reduction           = 0.8,
+     turn_bias                 = 1.075,
+     cardinal_directions       = false,
+ 
+     -- Size of the vehicle, to be limited by physical restriction of the way
+-    vehicle_height = 2.0, -- in meters, 2.0m is the height slightly above biggest SUVs
+-    vehicle_width = 1.9, -- in meters, ways with narrow tag are considered narrower than 2.2m
++    vehicle_height = 2.8, -- in meters
++    vehicle_width = 2.2, -- in meters
+ 
+     -- Size of the vehicle, to be limited mostly by legal restriction of the way
+-    vehicle_length = 4.8, -- in meters, 4.8m is the length of large or family car
+-    vehicle_weight = 2000, -- in kilograms
++    vehicle_length = 6.0, -- in meters, 4.8m is the length of large or familly car
++    vehicle_weight = 6000, -- in kilograms
+ 
+     -- a list of suffixes to suppress in name change instructions. The suffixes also include common substrings of each other
+     suffix_list = {
+@@ -157,6 +157,24 @@ function setup()
+       }
+     },
+ 
++    highway_penalties = {
++      motorway        = 1,
++      motorway_link   = 1,
++      trunk           = 1,
++      trunk_link      = 1,
++      primary         = 1,
++      primary_link    = 1,
++      secondary       = 1,
++      secondary_link  = 1,
++      tertiary        = 0.9,
++      tertiary_link   = 0.9,
++      unclassified    = 0.8,
++      residential     = 0.7,
++      living_street   = 0.3,
++      service         = 0.2,
++      track           = 0.1
++    },
++
+     service_penalties = {
+       alley             = 0.5,
+       parking           = 0.5,
+@@ -434,6 +452,11 @@ function process_way(profile, way, result, relations)
+     WayHandlers.surface,
+     WayHandlers.penalties,
+ 
++    -- set penalty to try to follow legal access restriction
++    WayHandlers.handle_weight,
++    WayHandlers.handle_length,
++    WayHandlers.handle_hgv_access,
++
+     -- compute class labels
+     WayHandlers.classes,
+ 
+diff --git a/profiles/lib/way_handlers.lua b/profiles/lib/way_handlers.lua
+index b13410235..356cf572c 100644
+--- a/profiles/lib/way_handlers.lua
++++ b/profiles/lib/way_handlers.lua
+@@ -375,6 +375,12 @@ end
+ function WayHandlers.penalties(profile,way,result,data)
+   -- heavily penalize a way tagged with all HOV lanes
+   -- in order to only route over them if there is no other option
++  local highway_penalty = 1.0
++  local highway = way:get_value_by_key("highway")
++  if highway and profile.highway_penalties[highway] then
++    highway_penalty = profile.highway_penalties[highway]
++  end
++
+   local service_penalty = 1.0
+   local service = way:get_value_by_key("service")
+   if service and profile.service_penalties[service] then
+@@ -414,8 +420,8 @@ function WayHandlers.penalties(profile,way,result,data)
+     sideroad_penalty = profile.side_road_multiplier
+   end
+ 
+-  local forward_penalty = math.min(service_penalty, width_penalty, alternating_penalty, sideroad_penalty)
+-  local backward_penalty = math.min(service_penalty, width_penalty, alternating_penalty, sideroad_penalty)
++  local forward_penalty = math.min(highway_penalty, service_penalty, width_penalty, alternating_penalty, sideroad_penalty)
++  local backward_penalty = math.min(highway_penalty, service_penalty, width_penalty, alternating_penalty, sideroad_penalty)
+ 
+   if profile.properties.weight_name == 'routability' then
+     if result.forward_speed > 0 then
+@@ -508,6 +514,37 @@ function WayHandlers.handle_width(profile,way,result,data)
+   end
+ end
+ 
++-- handle maxlength tags
++function WayHandlers.handle_length(profile,way,result,data)
++  local keys = Sequence { 'maxlength' }
++  local forward, backward = Tags.get_forward_backward_by_set(way,data,keys)
++  forward = Measure.get_max_length(forward)
++  backward = Measure.get_max_length(backward)
++
++  local keys_conditional = Sequence { 'maxlength:conditional' }
++  local forward_conditional, backward_conditional = Tags.get_forward_backward_by_set(way,data,keys_conditional)
++
++  if forward and forward < profile.vehicle_length then
++    if forward_conditional and string.match(forward_conditional, 'no(ne)? ?@') and (string.match(forward_conditional, 'destination') or string.match(forward_conditional, 'delivery')) then
++      -- Discourage usage
++      result.forward_rate = math.min(result.forward_rate, (result.forward_speed * 0.7) / 3.6)
++    else
++      -- No legal access at any condition, set a large weight
++      result.forward_rate = math.min(result.forward_rate, (result.forward_speed * 0.2) / 3.6)
++    end
++  end
++
++  if backward and backward < profile.vehicle_length then
++    if backward_conditional and string.match(backward_conditional, 'no(ne)? ?@') and (string.match(backward_conditional, 'destination') or string.match(backward_conditional, 'delivery')) then
++      -- Discourage usage
++      result.backward_rate = math.min(result.backward_rate, (result.backward_speed * 0.7) / 3.6)
++    else
++      -- No legal access at any condition, set a large weight
++      result.backward_rate = math.min(result.backward_rate, (result.backward_speed * 0.2) / 3.6)
++    end
++  end
++end
++
+ -- handle maxweight tags
+ function WayHandlers.handle_weight(profile,way,result,data)
+   local keys = Sequence { 'maxweight' }
+@@ -515,28 +552,46 @@ function WayHandlers.handle_weight(profile,way,result,data)
+   forward = Measure.get_max_weight(forward)
+   backward = Measure.get_max_weight(backward)
+ 
++  local keys_conditional = Sequence { 'maxweight:conditional' }
++  local forward_conditional, backward_conditional = Tags.get_forward_backward_by_set(way,data,keys_conditional)
++
+   if forward and forward < profile.vehicle_weight then
+-    result.forward_mode = mode.inaccessible
++    if forward_conditional and string.match(forward_conditional, 'no(ne)? ?@') and (string.match(forward_conditional, 'destination') or string.match(forward_conditional, 'delivery')) then
++      -- Discourage usage
++      result.forward_rate = math.max(1, math.min(result.forward_rate, (result.forward_speed * 0.7) / 3.6))
++    else
++      -- No legal access at any condition, set a large weight
++      result.forward_rate = math.max(1, math.min(result.forward_rate, (result.forward_speed * 0.2) / 3.6))
++    end
+   end
+ 
+   if backward and backward < profile.vehicle_weight then
+-    result.backward_mode = mode.inaccessible
++    if backward_conditional and string.match(backward_conditional, 'no(ne)? ?@') and (string.match(backward_conditional, 'destination') or string.match(backward_conditional, 'delivery')) then
++      -- Discourage usage
++      result.backward_rate = math.max(1, math.min(result.backward_rate, (result.backward_speed * 0.7) / 3.6))
++    else
++      -- No legal access at any condition, set a large weight
++      result.backward_rate = math.max(1, math.min(result.backward_rate, (result.backward_speed * 0.2) / 3.6))
++    end
+   end
+ end
+ 
+--- handle maxlength tags
+-function WayHandlers.handle_length(profile,way,result,data)
+-  local keys = Sequence { 'maxlength' }
++-- handle hgv access tags
++function WayHandlers.handle_hgv_access(profile,way,result,data)
++  local keys = Sequence { 'hgv', 'goods' }
+   local forward, backward = Tags.get_forward_backward_by_set(way,data,keys)
+-  forward = Measure.get_max_length(forward)
+-  backward = Measure.get_max_length(backward)
+ 
+-  if forward and forward < profile.vehicle_length then
+-    result.forward_mode = mode.inaccessible
++  local keys_conditional = Sequence { 'hgv:conditional', 'goods:conditional' }
++  local forward_conditional, backward_conditional = Tags.get_forward_backward_by_set(way,data,keys_conditional)
++
++  if forward == 'no' and (not forward_conditional or not(string.match(forward_conditional, 'yes') or string.match(forward_conditional, 'destination') or string.match(forward_conditional, 'delivery'))) then
++    -- No legal access at any condition, set a large weight
++    result.forward_rate = math.min(result.forward_rate, (result.forward_speed * 0.1) / 3.6)
+   end
+ 
+-  if backward and backward < profile.vehicle_length then
+-    result.backward_mode = mode.inaccessible
++  if backward == 'no' and (not backward_conditional or not(string.match(backward_conditional, 'yes') or string.match(backward_conditional, 'destination') or string.match(backward_conditional, 'delivery'))) then
++    -- No legal access at any condition, set a large weight
++    result.backward_rate = math.min(result.backward_rate, (result.backward_speed * 0.1) / 3.6)
+   end
+ end
+ 
